@@ -1,8 +1,28 @@
 services:
-  app:
+  frontend:
     build: .
     restart: unless-stopped
     ports:
       - "3000:3000"
+    environment:
+      - BACKEND_URL=http://backend:8000
     env_file:
       - .env.local
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - UPLOAD_DIR=/tmp/uploads
+      - RENDER_DIR=/tmp/renders
+    volumes:
+      - uploads:/tmp/uploads
+      - renders:/tmp/renders
+
+volumes:
+  uploads:
+  renders:
