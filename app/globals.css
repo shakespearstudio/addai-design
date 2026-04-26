@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── CSS 变量 ─────────────────────────────────────────────────── */
+:root {
+  /* Calm 主题（深色，Linear / Vercel 风格） */
+  --calm-bg:      #0A0A0B;
+  --calm-surface: #111113;
+  --calm-border:  #1F1F23;
+  --calm-text:    #FFFFFF;
+  --calm-muted:   #888890;
+  --calm-accent:  #5B5BD6;
+
+  /* Warm Glass 主题（delight.ai 风格） */
+  --glass-blur:   12px;
+  --glass-bg:     rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.15);
+  --glass-text:   #1A1A2E;
+  --glass-muted:  #666680;
+  --glass-accent: #7C6AC7;
+}
+
+/* ─── Warm Glass 工具类 ─────────────────────────────────────────── */
+@layer components {
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    border-radius: 1rem;
+  }
+
+  .glass-card-strong {
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.20);
+    border-radius: 1rem;
+  }
+}
+
+/* ─── 基础 ──────────────────────────────────────────────────────── */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
