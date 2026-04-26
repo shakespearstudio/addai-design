@@ -23,8 +23,12 @@ export default function NewProject() {
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [isDocDragging, setIsDocDragging] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [reqMode, setReqMode] = useState<'text' | 'doc'>('text')
+  const [docFile, setDocFile] = useState<File | null>(null)
+  const [docText, setDocText] = useState('')
 
   const [form, setForm] = useState({
     project_name: '',
@@ -33,7 +37,7 @@ export default function NewProject() {
     space_types: ['open_office', 'reception', 'meeting_rooms'] as string[],
     has_livestream: false,
     brand_style: 'modern_minimalist',
-    special_requirements: '',
+    free_requirements: '',
   })
 
   const handleFile = useCallback((f: File) => {
@@ -50,12 +54,42 @@ export default function NewProject() {
     setPreview(URL.createObjectURL(f))
   }, [])
 
+  const handleDocFile = useCallback((f: File) => {
+    const ext = f.name.split('.').pop()?.toLowerCase()
+    if (!['txt', 'pdf', 'md'].includes(ext || '')) {
+      setError('文档支持 TXT、PDF 或 Markdown 格式')
+      return
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      setError('文档大小不能超过 5MB')
+      return
+    }
+    setError('')
+    setDocFile(f)
+
+    // TXT / MD 直接客户端读取
+    if (ext === 'txt' || ext === 'md') {
+      const reader = new FileReader()
+      reader.onload = (e) => setDocText((e.target?.result as string) || '')
+      reader.readAsText(f, 'utf-8')
+    } else {
+      setDocText('') // PDF 由服务端提取
+    }
+  }, [])
+
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
     const f = e.dataTransfer.files[0]
     if (f) handleFile(f)
   }, [handleFile])
+
+  const onDocDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDocDragging(false)
+    const f = e.dataTransfer.files[0]
+    if (f) handleDocFile(f)
+  }, [handleDocFile])
 
   const toggleSpaceType = (id: string) => {
     setForm(prev => ({
@@ -70,13 +104,29 @@ export default function NewProject() {
     if (!file) { setError('请上传平面图'); return }
     if (!form.project_name.trim()) { setError('请输入项目名称'); return }
     if (form.space_types.length === 0) { setError('请至少选择一种空间类型'); return }
+    if (reqMode === 'text' && !form.free_requirements.trim() && !form.project_name.trim()) {
+      setError('建议填写需求描述以获得更精准的规划结果')
+    }
 
     setLoading(true)
     setError('')
 
+    const reqPayload = { ...form }
+
     const fd = new FormData()
     fd.append('floor_plan', file)
-    fd.append('requirements', JSON.stringify(form))
+    fd.append('requirements', JSON.stringify(reqPayload))
+
+    // 附加文档
+    if (reqMode === 'doc' && docFile) {
+      const ext = docFile.name.split('.').pop()?.toLowerCase()
+      if ((ext === 'txt' || ext === 'md') && docText) {
+        // 文本内容合并进 requirements
+        fd.set('requirements', JSON.stringify({ ...reqPayload, free_requirements: docText }))
+      } else {
+        fd.append('requirements_doc', docFile)
+      }
+    }
 
     try {
       const res = await fetch('/api/backend/planning/analyze', {
@@ -98,7 +148,6 @@ export default function NewProject() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
       <header className="border-b border-[#1F1F23] px-6 py-4 flex items-center gap-3">
         <a href="/" className="text-[#888890] hover:text-white text-sm transition-colors">AddAI Design</a>
         <span className="text-[#1F1F23]">/</span>
@@ -106,7 +155,7 @@ export default function NewProject() {
       </header>
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-0">
-        {/* 左：上传区 */}
+        {/* 左：上传平面图 */}
         <div className="p-8 border-r border-[#1F1F23]">
           <h2 className="text-lg font-semibold mb-1">上传平面图</h2>
           <p className="text-sm text-[#888890] mb-6">支持 JPG、PNG、WebP，建议分辨率 1000px 以上</p>
@@ -149,6 +198,7 @@ export default function NewProject() {
           <p className="text-sm text-[#888890] mb-6">填写越详细，规划越精准</p>
 
           <div className="space-y-5">
+            {/* 基础信息 */}
             <div>
               <label className="label">项目名称</label>
               <input className="input-base" placeholder="例：上海XX公司办公室改造" value={form.project_name}
@@ -203,12 +253,93 @@ export default function NewProject() {
               </label>
             </div>
 
+            {/* 需求描述区域 */}
             <div>
-              <label className="label">特殊要求（选填）</label>
-              <textarea className="input-base resize-none" rows={3}
-                placeholder="例：需要无障碍通道、需要独立服务器机房、VIP 接待区需与普通区域隔离..."
-                value={form.special_requirements}
-                onChange={e => setForm(p => ({ ...p, special_requirements: e.target.value }))} />
+              <div className="flex items-center justify-between mb-2">
+                <label className="label mb-0">需求描述</label>
+                <div className="flex bg-[#111113] border border-[#1F1F23] rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setReqMode('text')}
+                    className={`px-3 py-1 text-xs transition-colors ${reqMode === 'text' ? 'bg-[#1F1F23] text-white' : 'text-[#888890] hover:text-white'}`}
+                  >
+                    文字描述
+                  </button>
+                  <button
+                    onClick={() => setReqMode('doc')}
+                    className={`px-3 py-1 text-xs transition-colors ${reqMode === 'doc' ? 'bg-[#1F1F23] text-white' : 'text-[#888890] hover:text-white'}`}
+                  >
+                    上传文档
+                  </button>
+                </div>
+              </div>
+
+              {reqMode === 'text' ? (
+                <textarea
+                  className="input-base resize-none"
+                  rows={7}
+                  placeholder={`在此自由描述项目需求，越详细越好。例如：
+
+- 企业文化：科技公司，强调开放协作与创新
+- 核心诉求：增强团队互动，减少固定工位
+- 特殊要求：需要独立服务器机房、VIP 接待区与普通区隔离
+- 参考案例：偏向字节、飞书办公室风格
+- 预算范围：精装标准 3000元/㎡`}
+                  value={form.free_requirements}
+                  onChange={e => setForm(p => ({ ...p, free_requirements: e.target.value }))}
+                />
+              ) : (
+                <div>
+                  {docFile ? (
+                    <div className="surface rounded-xl p-4 flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-indigo-600/10 border border-indigo-500/20 flex items-center justify-center flex-shrink-0">
+                        <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{docFile.name}</p>
+                        <p className="text-xs text-[#888890] mt-0.5">
+                          {(docFile.size / 1024).toFixed(0)} KB
+                          {docText && <span className="ml-2 text-green-400">已读取文本内容</span>}
+                          {!docText && docFile.name.endsWith('.pdf') && <span className="ml-2 text-[#888890]">将由服务端解析</span>}
+                        </p>
+                        {docText && (
+                          <p className="text-xs text-[#555560] mt-1.5 line-clamp-2">{docText.slice(0, 120)}…</p>
+                        )}
+                      </div>
+                      <button onClick={() => { setDocFile(null); setDocText('') }} className="text-[#555560] hover:text-white transition-colors mt-0.5">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setIsDocDragging(true) }}
+                      onDragLeave={() => setIsDocDragging(false)}
+                      onDrop={onDocDrop}
+                      onClick={() => document.getElementById('doc-input')?.click()}
+                      className={`rounded-xl border-2 border-dashed transition-colors duration-150 cursor-pointer p-6 text-center
+                        ${isDocDragging ? 'border-indigo-500 bg-indigo-500/5' : 'border-[#1F1F23] hover:border-[#2F2F35]'}`}
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-[#111113] border border-[#1F1F23] flex items-center justify-center mx-auto mb-3">
+                        <svg className="w-5 h-5 text-[#888890]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <p className="text-sm text-[#888890]">拖拽文档到这里，或<span className="text-indigo-400 ml-1">点击上传</span></p>
+                      <p className="text-xs text-[#555560] mt-1">TXT · PDF · Markdown · 最大 5MB</p>
+                    </div>
+                  )}
+                  <input
+                    id="doc-input"
+                    type="file"
+                    accept=".txt,.pdf,.md"
+                    className="hidden"
+                    onChange={e => e.target.files?.[0] && handleDocFile(e.target.files[0])}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>

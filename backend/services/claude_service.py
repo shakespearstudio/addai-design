@@ -41,6 +41,8 @@ def analyze_floor_plan(floor_plan_path: str, requirements: dict) -> dict:
         "boutique": "精品酒店风",
     }
 
+    free_req = requirements.get("free_requirements") or requirements.get("special_requirements") or ""
+
     user_message = f"""请分析这张办公空间平面图，根据以下客户需求提供专业平面规划方案。
 
 客户需求：
@@ -50,7 +52,7 @@ def analyze_floor_plan(floor_plan_path: str, requirements: dict) -> dict:
 - 需要的空间类型：{space_list}
 - 是否有直播间需求：{'是' if requirements.get('has_livestream') else '否'}
 - 品牌风格方向：{style_cn.get(requirements.get('brand_style', ''), requirements.get('brand_style', ''))}
-- 特殊要求：{requirements.get('special_requirements') or '无'}
+- 详细需求描述：{free_req if free_req else '无'}
 
 请严格按照要求的 JSON 格式返回，只返回 JSON，不要有其他文字。"""
 
